@@ -16,7 +16,7 @@
 
 -behaviour(supervisor).
 -export([init/1]).
--export([start_udp/1, start_udp/2, start_udp/3, stop_udp/1, start_dtls/2, start_dtls/3, start_dtls/4, stop_dtls/1, channel_sup/1]).
+-export([start_udp/1, start_udp/2, start_udp/3, stop_udp/1, start_dtls/2, start_dtls/3, stop_dtls/1, channel_sup/1]).
 
 -include("coap.hrl").
 
@@ -29,7 +29,6 @@ start(normal, []) ->
 stop(_Pid) ->
     ok.
 
-
 init([]) ->
     {ok, {{one_for_all, 3, 10}, [
         {coap_server_registry,
@@ -41,13 +40,12 @@ init([]) ->
     ]}}.
 
 start_udp(Name) ->
-    start_udp(Name, undefined, ?DEFAULT_COAP_PORT).
+    start_udp(Name, ?DEFAULT_COAP_PORT, []).
 
 start_udp(Name, UdpPort) ->
-    start_udp(Name, undefined, UdpPort).
+    start_udp(Name, UdpPort, []).
 
-start_udp(Name, Ip, UdpPort) ->
-    Opts = address_family(Ip),
+start_udp(Name, UdpPort, Opts) ->
     supervisor:start_child(?MODULE,
         {Name,
             {coap_udp_socket, start_link, [UdpPort, Opts, whereis(?MODULE)]},
@@ -59,22 +57,17 @@ stop_udp(Name) ->
 
 
 start_dtls(Name, DtlsOpts) ->
-    start_dtls(Name, undefined, ?DEFAULT_COAPS_PORT, DtlsOpts).
+    start_dtls(Name, ?DEFAULT_COAPS_PORT, DtlsOpts).
 
 start_dtls(Name, DtlsPort, DtlsOpts) ->
-    start_dtls(Name, undefined, DtlsPort, DtlsOpts).
-
-start_dtls(Name, Ip, DtlsPort, DtlsOpts) ->
-    Opts = address_family(Ip),
     supervisor:start_child(?MODULE,
         {Name,
-            {coap_dtls_listen, start_link, [Name, DtlsPort, Opts ++ DtlsOpts]},
-            transient, 5000, worker, []}).
+            {coap_dtls_listen_sup, start_link, [DtlsPort, DtlsOpts]},
+            permanent, infinity, supervisor, [Name]}).
 
 stop_dtls(Name) ->
     supervisor:terminate_child(?MODULE, Name),
-    supervisor:delete_child(?MODULE, Name),
-    coap_dtls_listen:stop(Name).
+    supervisor:delete_child(?MODULE, Name).
 
 channel_sup(SupPid) -> child(SupPid, coap_channel_sup_sup).
 
@@ -82,15 +75,4 @@ child(SupPid, Id) ->
     [Pid] = [Pid || {Id1, Pid, _, _} <- supervisor:which_children(SupPid),
         Id1 =:= Id],
     Pid.
-
-address_family(undefined) ->
-    [];
-address_family(Ip) ->
-    case inet:parse_address(Ip) of
-        {ok, {_,_,_,_} = Addr} ->
-            [inet, {ip, Addr}];
-        {ok, {_,_,_,_,_,_,_,_} = Addr} ->
-            [inet6, {ip, Addr}]
-    end.
-
 % end of file

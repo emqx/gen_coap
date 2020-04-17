@@ -1,46 +1,75 @@
-%
-% The contents of this file are subject to the Mozilla Public License
-% Version 1.1 (the "License"); you may not use this file except in
-% compliance with the License. You may obtain a copy of the License at
-% http://www.mozilla.org/MPL/
-%
-% Copyright (c) 2016 Petr Gotthard <petr.gotthard@centrum.cz>
-%
+%%--------------------------------------------------------------------
+%% Copyright (c) 2020 EMQ Technologies Co., Ltd. All Rights Reserved.
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+%%--------------------------------------------------------------------
+
 -module(coap_dtls_listen).
--behaviour(supervisor).
 
+-author("dwg <dwg@emqx.io>").
+
+
+-behaviour(gen_server).
+
+%% API
 -export([start_link/3]).
--export([init/1]).
 
--export([start_socket/0, stop/1]).
+%% gen_server callbacks
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3]).
 
+-define(SERVER, ?MODULE).
 
-start_link(Name, InPort, Opts) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, [Name, InPort, Opts]).
+-record(state, {lsock}).
 
-init([Name, InPort, Opts]) ->
-    {ok, ListenSocket} = ssl:listen(InPort, Opts++[binary, {protocol, dtls}, {reuseaddr, true}]),
-    persistent_term:put({?MODULE, Name}, ListenSocket),
-    spawn_link(fun empty_listeners/0),
-    {ok, {{simple_one_for_one, 60, 3600},
-        [{socket,
-            {coap_dtls_socket, start_link, [ListenSocket]},
-            temporary, 1000, worker, [coap_dtls_socket]}
-        ]}}.
+%%%===================================================================
+%%% API
+%%%===================================================================
+start_link(SocketSup, InPort, Opts) ->
+    gen_server:start_link(?MODULE, [SocketSup,InPort, Opts], []).
 
-start_socket() ->
-    supervisor:start_child(?MODULE, []).
+%%%===================================================================
+%%% gen_server callbacks
+%%%===================================================================
 
-empty_listeners() ->
-    [start_socket() || _ <- lists:seq(1,20)],
+init([SocketSup, InPort, Opts]) ->
+    process_flag(trap_exit, true),
+    case ssl:listen(InPort, Opts) of
+        {ok, ListenSocket} ->
+            [{ok , _} = coap_dtls_socket_sup:start_socket(SocketSup, ListenSocket) || _ <- lists:seq(1,20)],
+            {ok, #state{lsock = ListenSocket}};
+        {error, Reason} ->
+            {stop, {cannot_listen, InPort, Reason}}
+    end.
+
+handle_call(_Request, _From, State) ->
+    {reply, ok, State}.
+
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+terminate(_Reason, #state{lsock = LSock}) ->
+    ssl:close(LSock),
     ok.
 
-stop(Name) ->
-    case catch persistent_term:get({?MODULE, Name}) of
-        {'EXIT', _} -> ok;
-        Sock ->
-            ssl:close(Sock),
-            persistent_term:erase({?MODULE, Name})
-    end.
+code_change(_OldVsn, State, _Extra) ->
+        {ok, State}.
 
 % end of file

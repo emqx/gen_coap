@@ -41,13 +41,12 @@ handle_call({get_channel, ChId}, _From, State=#state{channel=undefined}) ->
 
 handle_cast(accept, State = #state{sock=ListenSocket}) ->
     {ok, Socket} = ssl:transport_accept(ListenSocket),
-    % create a new acceptor to maintain a set of waiting acceptors
-    coap_dtls_listen:start_socket(),
-    % establish the connection
     ok = ssl:ssl_accept(Socket),
     % FIXME: where do we get the chanel id?
     {ok, SupPid, Pid} = coap_channel_sup:start_link(self(), {{0,0,0,0}, 0}),
     {noreply, State#state{sock=Socket, supid=SupPid, channel=Pid}};
+handle_cast({error, closed}, State) ->
+    {stop, normal, State};
 handle_cast(shutdown, State) ->
     {stop, normal, State}.
 
@@ -71,7 +70,6 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 terminate(_Reason, _State) ->
-    %io:fwrite("coap_dtls_socket terminated ~w~n", [Reason]),
     ok.
 
 % end of file
