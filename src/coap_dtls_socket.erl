@@ -40,13 +40,15 @@ handle_call({get_channel, ChId}, _From, State=#state{channel=undefined}) ->
     {reply, {ok, Pid}, State#state{supid=SupPid, channel=Pid}}.
 
 handle_cast(accept, State = #state{sock=ListenSocket}) ->
-    {ok, Socket} = ssl:transport_accept(ListenSocket),
-    ok = ssl:ssl_accept(Socket),
-    % FIXME: where do we get the chanel id?
-    {ok, SupPid, Pid} = coap_channel_sup:start_link(self(), {{0,0,0,0}, 0}),
-    {noreply, State#state{sock=Socket, supid=SupPid, channel=Pid}};
-handle_cast({error, closed}, State) ->
-    {stop, normal, State};
+    case ssl:transport_accept(ListenSocket) of
+        {ok, Socket} ->
+            ok = ssl:ssl_accept(Socket),
+            % FIXME: where do we get the chanel id?
+            {ok, SupPid, Pid} = coap_channel_sup:start_link(self(), {{0,0,0,0}, 0}),
+            {noreply, State#state{sock=Socket, supid=SupPid, channel=Pid}};
+        _ ->
+            {stop, normal, State}
+    end;
 handle_cast(shutdown, State) ->
     {stop, normal, State}.
 
