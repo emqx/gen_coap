@@ -22,12 +22,12 @@
 -define(EXCHANGE_LIFETIME, 247000).
 -define(NON_LIFETIME, 145000).
 
--record(state, {phase, sock, cid, channel, tid, resp, receiver, msg, timer, retry_time, retry_count}).
+-record(state, {phase, sendfun, cid, channel, tid, resp, receiver, msg, timer, retry_time, retry_count}).
 
 -include("coap.hrl").
 
-init(Sock, ChId, Channel, TrId, ReSup, Receiver) ->
-    #state{phase=idle, sock=Sock, cid=ChId, channel=Channel, tid=TrId, resp=ReSup, receiver=Receiver}.
+init(SendFun, ChId, Channel, TrId, ReSup, Receiver) ->
+    #state{phase=idle, sendfun=SendFun, cid=ChId, channel=Channel, tid=TrId, resp=ReSup, receiver=Receiver}.
 % process incoming message
 received(BinMessage, State=#state{phase=Phase}) ->
     ?MODULE:Phase({in, BinMessage}, State).
@@ -83,10 +83,10 @@ got_non({in, _Message}, State) ->
 
 % --- outgoing NON
 
-out_non({out, Message}, State=#state{sock=Sock, cid=ChId}) ->
+out_non({out, Message}, State=#state{sendfun=SendFun, cid=ChId}) ->
     %io:fwrite("~p <= ~p~n", [self(), Message]),
     BinMessage = coap_message_parser:encode(Message),
-    Sock ! {datagram, ChId, BinMessage},
+    SendFun(ChId, BinMessage),
     next_state(sent_non, State).
 
 % we may get reset
@@ -127,9 +127,9 @@ go_await_aack(Message, State) ->
 await_aack({in, _BinMessage}, State) ->
     % ignore request retransmission
     next_state(await_aack, State);
-await_aack({timeout, await_aack}, State=#state{sock=Sock, cid=ChId, msg=BinAck}) ->
+await_aack({timeout, await_aack}, State=#state{sendfun=SendFun, cid=ChId, msg=BinAck}) ->
     %io:fwrite("~p <- ack [application didn't respond]~n", [self()]),
-    Sock ! {datagram, ChId, BinAck},
+    SendFun(ChId, BinAck),
     next_state(pack_sent, State);
 await_aack({out, Ack}, State) ->
     % set correct type for a piggybacked response
@@ -139,15 +139,15 @@ await_aack({out, Ack}, State) ->
     end,
     go_pack_sent(Ack2, State).
 
-go_pack_sent(Ack, State=#state{sock=Sock, cid=ChId}) ->
+go_pack_sent(Ack, State=#state{sendfun=SendFun, cid=ChId}) ->
     %io:fwrite("~p <- ~p~n", [self(), Ack]),
     BinAck = coap_message_parser:encode(Ack),
-    Sock ! {datagram, ChId, BinAck},
+    SendFun(ChId, BinAck),
     next_state(pack_sent, State#state{msg=BinAck}).
 
-pack_sent({in, _BinMessage}, State=#state{sock=Sock, cid=ChId, msg=BinAck}) ->
+pack_sent({in, _BinMessage}, State=#state{sendfun=SendFun, cid=ChId, msg=BinAck}) ->
     % retransmit the ack
-    Sock ! {datagram, ChId, BinAck},
+    SendFun(ChId, BinAck),
     next_state(pack_sent, State);
 pack_sent({timeout, await_aack}, State) ->
     % ignore this timeout since it is produced by a race condition
@@ -155,10 +155,10 @@ pack_sent({timeout, await_aack}, State) ->
 
 % --- outgoing CON->ACK|RST
 
-out_con({out, Message}, State=#state{sock=Sock, cid=ChId}) ->
+out_con({out, Message}, State=#state{sendfun=SendFun, cid=ChId}) ->
     %io:fwrite("~p, <= ~p~n", [self(), Message]),
     BinMessage = coap_message_parser:encode(Message),
-    Sock ! {datagram, ChId, BinMessage},
+    SendFun(ChId, BinMessage),
     _ = rand:seed(exs1024),
     Timeout = ?ACK_TIMEOUT+rand:uniform(?ACK_RANDOM_FACTOR),
     next_state(await_pack, State#state{msg=Message, retry_time=Timeout, retry_count=0}, Timeout).
@@ -177,9 +177,9 @@ await_pack({in, BinAck}, State) ->
             ok
     end,
     next_state(aack_sent, State);
-await_pack({timeout, await_pack}, State=#state{sock=Sock, cid=ChId, msg=Message, retry_time=Timeout, retry_count=Count}) when Count < ?MAX_RETRANSMIT ->
+await_pack({timeout, await_pack}, State=#state{sendfun=SendFun, cid=ChId, msg=Message, retry_time=Timeout, retry_count=Count}) when Count < ?MAX_RETRANSMIT ->
     BinMessage = coap_message_parser:encode(Message),
-    Sock ! {datagram, ChId, BinMessage},
+    SendFun(ChId, BinMessage),
     Timeout2 = Timeout*2,
     next_state(await_pack, State#state{retry_time=Timeout2, retry_count=Count+1}, Timeout2);
 await_pack({timeout, await_pack}, State=#state{tid={out, _MsgId}, msg=Message}) ->

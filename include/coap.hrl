@@ -9,3 +9,5 @@
 
 -type coap_message() :: #coap_message{}.
 -type coap_content() :: #coap_content{}.
+
+-define(UDP_SOCKOPTS, []).

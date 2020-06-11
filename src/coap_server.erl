@@ -1,4 +1,3 @@
-%
 % The contents of this file are subject to the Mozilla Public License
 % Version 1.1 (the "License"); you may not use this file except in
 % compliance with the License. You may obtain a copy of the License at
@@ -12,13 +11,27 @@
 -module(coap_server).
 
 -behaviour(application).
+
 -export([start/0, start/2, stop/1]).
 
 -behaviour(supervisor).
+
 -export([init/1]).
--export([start_udp/1, start_udp/2, start_udp/3, stop_udp/1, start_dtls/2, start_dtls/3, stop_dtls/1, channel_sup/1]).
+
+-export([ start_udp/1
+        , start_udp/2
+        , start_udp/3
+        , start_dtls/2
+        , start_dtls/3
+        , stop_udp/1
+        , stop_dtls/1
+        ]).
 
 -include("coap.hrl").
+
+%%--------------------------------------------------------------------
+%% Application
+%%--------------------------------------------------------------------
 
 start() ->
     start(normal, []).
@@ -29,50 +42,75 @@ start(normal, []) ->
 stop(_Pid) ->
     ok.
 
+%%--------------------------------------------------------------------
+%% Supervisor callbacks
+%%--------------------------------------------------------------------
+
 init([]) ->
-    {ok, {{one_for_all, 3, 10}, [
-        {coap_server_registry,
-            {coap_server_registry, start_link, []},
-            permanent, 5000, worker, []},
-        {coap_channel_sup_sup,
-            {coap_channel_sup_sup, start_link, []},
-            permanent, infinity, supervisor, []}
-    ]}}.
+    Registry = {coap_server_registry,
+                {coap_server_registry, start_link, []},
+                 permanent, 5000, worker, []},
+    {ok, {{one_for_all, 3, 10}, [Registry]}}.
 
-start_udp(Name) ->
-    start_udp(Name, ?DEFAULT_COAP_PORT, []).
+%%--------------------------------------------------------------------
+%% APIs
+%%--------------------------------------------------------------------
 
-start_udp(Name, UdpPort) ->
-    start_udp(Name, UdpPort, []).
+-spec(start_udp(atom()) -> {ok, pid()} | {error, term()}).
+start_udp(Proto) ->
+    start_udp(Proto, ?DEFAULT_COAP_PORT, []).
 
-start_udp(Name, UdpPort, Opts) ->
-    supervisor:start_child(?MODULE,
-        {Name,
-            {coap_udp_socket, start_link, [UdpPort, Opts, whereis(?MODULE)]},
-            transient, 5000, worker, []}).
+-spec(start_udp(atom(), inet:port_number()) -> {ok, pid()} | {error, term()}).
+start_udp(Proto, ListenOn) ->
+    start_udp(Proto, ListenOn, []).
 
-stop_udp(Name) ->
-    supervisor:terminate_child(?MODULE, Name),
-    supervisor:delete_child(?MODULE, Name).
+-spec(start_udp(atom(), inet:port_number(), list()) -> {ok, pid()} | {error, term()}).
+start_udp(Proto, ListenOn, Opts) ->
+    start_udp_listener(Proto, ListenOn, Opts).
 
+-spec(stop_udp(atom()) -> ok).
+stop_udp(Name = {_Proto, _ListenOn}) ->
+    esockd:close(Name).
 
-start_dtls(Name, DtlsOpts) ->
-    start_dtls(Name, ?DEFAULT_COAPS_PORT, DtlsOpts).
+-spec(start_dtls(atom(), list()) -> {ok, pid()} | {error, term()}).
+start_dtls(Proto, Opts) ->
+    start_dtls(Proto, ?DEFAULT_COAPS_PORT, Opts).
 
-start_dtls(Name, DtlsPort, DtlsOpts) ->
-    supervisor:start_child(?MODULE,
-        {Name,
-            {coap_dtls_listen_sup, start_link, [DtlsPort, DtlsOpts]},
-            permanent, infinity, supervisor, [Name]}).
+-spec(start_dtls(atom(), inet:port_number(), list()) -> {ok, pid()} | {error, term()}).
+start_dtls(Proto, ListenOn, Opts) ->
+    start_dtls_listener(Proto, ListenOn, Opts).
 
-stop_dtls(Name) ->
-    supervisor:terminate_child(?MODULE, Name),
-    supervisor:delete_child(?MODULE, Name).
+-spec(stop_dtls(atom()) -> ok).
+stop_dtls(Name = {_Proto, _ListenOn}) ->
+    esockd:close(Name).
 
-channel_sup(SupPid) -> child(SupPid, coap_channel_sup_sup).
+%%--------------------------------------------------------------------
+%% Internal funcs
+%%--------------------------------------------------------------------
 
-child(SupPid, Id) ->
-    [Pid] = [Pid || {Id1, Pid, _, _} <- supervisor:which_children(SupPid),
-        Id1 =:= Id],
-    Pid.
-% end of file
+start_udp_listener(Name, ListenOn, Options) ->
+    SockOpts = esockd:parse_opt(Options),
+    esockd:open_udp(Name, ListenOn, merge_default(udp_options, SockOpts),
+                    {coap_channel, start_link, []}).
+
+start_dtls_listener(Name, ListenOn, Options) ->
+    SockOpts = esockd:parse_opt(Options),
+    esockd:open_dtls(Name, ListenOn, merge_default(dtls_options, SockOpts),
+                     {coap_channel, start_link, []}).
+
+merge_default(Name, Options) ->
+    case lists:keytake(Name, 1, Options) of
+        {value, {Name, UdpOpts}, Options1} ->
+            [{Name, merge_opts(?UDP_SOCKOPTS, UdpOpts)} | Options1];
+        false ->
+            [{Name, ?UDP_SOCKOPTS} | Options]
+    end.
+
+merge_opts(Defaults, Options) ->
+    lists:foldl(
+      fun({Opt, Val}, Acc) ->
+          lists:keystore(Opt, 1, Acc, {Opt, Val});
+         (Opt, Acc) ->
+          lists:usort([Opt | Acc])
+      end, Defaults, Options).
+

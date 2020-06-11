@@ -5,6 +5,6 @@
 	{registered, []},
 	{mod, {coap_server, []}},
 	{env, []},
-	{applications, [kernel, stdlib, ssl]}]}.
+	{applications, [kernel, stdlib, esockd]}]}.
 
 % end of file

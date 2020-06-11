@@ -18,3 +18,4 @@ gen_coap.iml
 rebar.lock
 .rebar3/
 .tags*
+*.swp
