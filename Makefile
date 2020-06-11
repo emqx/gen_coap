@@ -36,6 +36,15 @@ distclean: clean
 test:
 	@$(REBAR3) eunit
 
+xref:
+	@$(REBAR3) xref
+
+ct:
+	@$(REBAR3) ct
+
+dialyzer:
+	@$(REBAR3) dialyzer
+
 release:
 	@$(REBAR3) release
 

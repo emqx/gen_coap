@@ -11,11 +11,16 @@
 -module(coap_client).
 
 -export([ping/1, request/2, request/3, request/4, request/5, ack/2]).
+
 -export([resolve_uri/1, await_response/5]).
 
 -define(DEFAULT_TIMEOUT, 30000).
 
 -include("coap.hrl").
+
+%%--------------------------------------------------------------------
+%% APIs
+%%--------------------------------------------------------------------
 
 ping(Uri) ->
     {Scheme, ChId, _Path, _Query} = resolve_uri(Uri),
@@ -88,6 +93,7 @@ await_response(Channel, Method, ROpt, Ref, Content, Timeout, Fragment) ->
             {error, connection_failed}
     end.
 
+%% @private
 return_response({ok, Code}, Message) ->
     {ok, Code, coap_message:get_content(Message)};
 return_response({error, Code}, #coap_message{payload= <<>>}) ->
