@@ -89,7 +89,7 @@ init([Socket, ChId]) ->
                            trans=dict:new(), nextmid=first_mid(), res=ReSup, rescnt=0},
             gen_server:enter_loop(?MODULE, [], State);
         {error, Reason} ->
-            ok = esockd_close(Socket),
+            _ = esockd_close(Socket),
             exit_on_sock_error(Reason)
     end.
 

@@ -23,8 +23,8 @@
         , start_udp/3
         , start_dtls/2
         , start_dtls/3
-        , stop_udp/1
-        , stop_dtls/1
+        , stop_udp/2
+        , stop_dtls/2
         ]).
 
 -include("coap.hrl").
@@ -68,9 +68,9 @@ start_udp(Proto, ListenOn) ->
 start_udp(Proto, ListenOn, Opts) ->
     start_udp_listener(Proto, ListenOn, Opts).
 
--spec(stop_udp(atom()) -> ok).
-stop_udp(Name = {_Proto, _ListenOn}) ->
-    esockd:close(Name).
+-spec(stop_udp(atom(), inet:port_number()) -> ok).
+stop_udp(Proto, ListenOn) ->
+    esockd:close(Proto, ListenOn).
 
 -spec(start_dtls(atom(), list()) -> {ok, pid()} | {error, term()}).
 start_dtls(Proto, Opts) ->
@@ -80,9 +80,9 @@ start_dtls(Proto, Opts) ->
 start_dtls(Proto, ListenOn, Opts) ->
     start_dtls_listener(Proto, ListenOn, Opts).
 
--spec(stop_dtls(atom()) -> ok).
-stop_dtls(Name = {_Proto, _ListenOn}) ->
-    esockd:close(Name).
+-spec(stop_dtls(atom(), inet:port_number()) -> ok).
+stop_dtls(Proto, ListenOn) ->
+    esockd:close(Proto, ListenOn).
 
 %%--------------------------------------------------------------------
 %% Internal funcs
