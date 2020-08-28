@@ -9,7 +9,7 @@
 
 % registry of server content handlers
 -module(coap_server_registry).
--export([add_handler/3, get_handler/1, get_links/0]).
+-export([add_handler/3, get_handler/1, get_links/0, remove_handler/3]).
 
 -behaviour(gen_server).
 -export([start_link/0]).
@@ -19,6 +19,9 @@
 
 add_handler(Prefix, Module, Args) ->
     gen_server:call(?MODULE, {add_handler, Prefix, Module, Args}).
+
+remove_handler(Prefix, Module, Args) ->
+    gen_server:call(?MODULE, {remove_handler, Prefix, Module, Args}).
 
 get_handler(Uri) ->
     gen_server:call(?MODULE, {get_handler, Uri}).
@@ -37,11 +40,18 @@ init(_Args) ->
     }}.
 
 handle_call({add_handler, Prefix, Module, Args}, _From, State=#state{reg=Reg}) ->
-    NewReg =    case lists:member({Prefix, Module, Args}, Reg) of
-                    true  -> Reg;
-                    false -> [{Prefix, Module, Args}|Reg]
-                end,
+    NewReg = case lists:member({Prefix, Module, Args}, Reg) of
+        true  -> Reg;
+        false -> [{Prefix, Module, Args}|Reg]
+    end,
     {reply, ok, State#state{reg=NewReg}};
+
+handle_call({remove_handler, Prefix, Module, Args}, _From, State=#state{reg=Reg}) ->
+    NReg = case lists:member({Prefix, Module, Args}, Reg) of
+        true  -> Reg;
+        false -> lists:delete({Prefix, Module, Args}, Reg)
+    end,
+    {reply, ok, State#state{reg=NReg}};
 
 
 handle_call({get_handler, Uri}, _From, State=#state{reg=Reg}) ->
