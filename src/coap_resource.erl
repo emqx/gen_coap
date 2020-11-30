@@ -44,6 +44,6 @@
 
 -type coap_channel_id() :: {inet:port_number(), inet:ip_address()}.
 -type coap_uri() :: {'absolute', [binary()], coap_uri_param()}.
--type coap_uri_param() :: {atom(), binary()}.
+-type coap_uri_param() :: [{atom(), binary()}].
 
 % end of file
