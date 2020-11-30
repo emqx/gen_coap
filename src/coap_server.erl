@@ -60,15 +60,15 @@ init([]) ->
 start_udp(Proto) ->
     start_udp(Proto, ?DEFAULT_COAP_PORT, []).
 
--spec(start_udp(atom(), inet:port_number()) -> {ok, pid()} | {error, term()}).
+-spec(start_udp(atom(), esockd:listen_on()) -> {ok, pid()} | {error, term()}).
 start_udp(Proto, ListenOn) ->
     start_udp(Proto, ListenOn, []).
 
--spec(start_udp(atom(), inet:port_number(), list()) -> {ok, pid()} | {error, term()}).
+-spec(start_udp(atom(), esockd:listen_on(), list()) -> {ok, pid()} | {error, term()}).
 start_udp(Proto, ListenOn, Opts) ->
     start_udp_listener(Proto, ListenOn, Opts).
 
--spec(stop_udp(atom(), inet:port_number()) ->  ok | {error, term()}).
+-spec(stop_udp(atom(), esockd:listen_on()) ->  ok | {error, term()}).
 stop_udp(Proto, ListenOn) ->
     esockd:close(Proto, ListenOn).
 
@@ -76,11 +76,11 @@ stop_udp(Proto, ListenOn) ->
 start_dtls(Proto, Opts) ->
     start_dtls(Proto, ?DEFAULT_COAPS_PORT, Opts).
 
--spec(start_dtls(atom(), inet:port_number(), list()) -> {ok, pid()} | {error, term()}).
+-spec(start_dtls(atom(), esockd:listen_on(), list()) -> {ok, pid()} | {error, term()}).
 start_dtls(Proto, ListenOn, Opts) ->
     start_dtls_listener(Proto, ListenOn, Opts).
 
--spec(stop_dtls(atom(), inet:port_number()) -> ok).
+-spec(stop_dtls(atom(), esockd:listen_on()) -> ok | {error, term()}).
 stop_dtls(Proto, ListenOn) ->
     esockd:close(Proto, ListenOn).
 
