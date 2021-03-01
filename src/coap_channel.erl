@@ -160,6 +160,12 @@ handle_info({responder_started}, State=#state{rescnt=Count}) ->
 handle_info({responder_completed}, State=#state{rescnt=Count}) ->
     purge_state(State#state{rescnt=Count-1});
 
+handle_info({inet_reply, _Sock, ok}, State) ->
+    {noreply, State};
+
+handle_info({ssl_closed, _Sock}, State) ->
+    {stop, normal, State};
+
 handle_info(Info, State) ->
     io:fwrite("unexpected massage ~p~n", [Info]),
     {noreply, State}.
